@@ -57,7 +57,8 @@ void Renderer::render(const GameContext& ctx, const Board& board, const std::str
             }
 
             if (isLast) {
-                ss << "\033[31m" << symbol << "\033[0m"; // Red highlight
+                // 最后一步特殊显示：使用亮洋红色 (Bold Magenta)
+                ss << "\033[1;35m" << symbol << "\033[0m"; 
             } else {
                 ss << symbol;
             }
