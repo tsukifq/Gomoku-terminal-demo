@@ -6,6 +6,11 @@
 #include <future>
 #include <thread>
 #include <conio.h> // For _kbhit, _getch
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 GameEngine::GameEngine() {
     rules = std::make_unique<GomokuRuleSet>();
@@ -42,9 +47,18 @@ void GameEngine::setup() {
 }
 
 void GameEngine::run() {
-    setup();
+    bool appRunning = true;
+    bool needSetup = true;
 
-    bool running = true;
+    while (appRunning) {
+        if (needSetup) {
+            setup();
+        } else {
+            board.reset();
+            rules->initGame(ctx, board);
+        }
+
+        bool running = true;
     std::string message = "Game Start!";
     
     auto gameStart = std::chrono::steady_clock::now();
@@ -136,7 +150,7 @@ void GameEngine::run() {
                         renderer.render(ctx, board, "TIMEOUT LOSE! " + message, currentInput);
                         running = false;
                         std::cout << "\nGame Over (Timeout). Press Enter to exit.\n";
-                        return; 
+                        break; 
                     } else {
                         // Warning
                         periodStart = std::chrono::steady_clock::now();
@@ -174,6 +188,7 @@ void GameEngine::run() {
         Side justMoved = ctx.toMove;
 
         rules->applyAction(ctx, board, justMoved, action);
+        ctx.history.push_back({justMoved, action});
 
         Outcome outcome = rules->evaluateAfterAction(ctx, board, justMoved, action);
         
@@ -195,7 +210,98 @@ void GameEngine::run() {
         }
     }
     
-    std::cout << "Game Over. Press Enter to exit.\n";
-    // std::cin.ignore();
-    std::cin.get();
+        // Post-game menu
+        bool inMenu = true;
+        while (inMenu) {
+            std::cout << "\n[Game Over Menu]\n";
+            std::cout << "1. Play Again (Same Settings)\n";
+            std::cout << "2. Switch Mode (New Settings)\n";
+            std::cout << "3. Save Game Record\n";
+            std::cout << "4. Exit\n";
+            std::cout << "Choice: ";
+            
+            int choice;
+            while (_kbhit()) _getch(); // Clear buffer
+            
+            if (!(std::cin >> choice)) {
+                std::cin.clear();
+                std::cin.ignore(10000, '\n');
+                choice = 0;
+            }
+            std::cin.ignore(); 
+
+            if (choice == 1) {
+                needSetup = false;
+                inMenu = false;
+            } else if (choice == 2) {
+                needSetup = true;
+                inMenu = false;
+            } else if (choice == 3) {
+                saveGameRecord();
+                std::cout << "Press Enter to continue...";
+                std::cin.get();
+            } else if (choice == 4) {
+                appRunning = false;
+                inMenu = false;
+            } else {
+                std::cout << "Invalid choice.\n";
+            }
+        }
+    }
+}
+
+void GameEngine::saveGameRecord() {
+    // Save to ../match so it is a sibling of build directory
+    std::string dir = "../match";
+    if (!fs::exists(dir)) {
+        fs::create_directory(dir);
+    }
+
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    std::ostringstream oss;
+    oss << dir << "/game_record_" << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".txt";
+    std::string filename = oss.str();
+
+    std::ofstream outfile(filename);
+    if (outfile.is_open()) {
+        outfile << "Gomoku Game Record\n";
+        outfile << "Date: " << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "\n";
+        outfile << "Black: " << (blackPlayer ? blackPlayer->name() : "Unknown") << "\n";
+        outfile << "White: " << (whitePlayer ? whitePlayer->name() : "Unknown") << "\n";
+        
+        outfile << "\n--- Move History ---\n";
+        int moveNum = 1;
+        for (const auto& move : ctx.history) {
+            outfile << moveNum++ << ". " << (move.first == Side::Black ? "Black" : "White");
+            if (move.second.type == ActionType::Place && move.second.pos.has_value()) {
+                outfile << " (" << move.second.pos->r << "," << move.second.pos->c << ")";
+            } else if (move.second.type == ActionType::Resign) {
+                outfile << " Resigns";
+            } else if (move.second.type == ActionType::ClaimForbidden) {
+                outfile << " Claims Forbidden";
+            }
+            outfile << " [" << move.second.spent.count() << "ms]\n";
+        }
+
+        outfile << "\n--- Final Board ---\n";
+        outfile << "   ";
+        for (int c = 0; c < Board::SIZE; ++c) outfile << (char)('A' + c) << " ";
+        outfile << "\n";
+        
+        for (int r = 0; r < Board::SIZE; ++r) {
+            outfile << (r + 1 < 10 ? " " : "") << (r + 1) << " ";
+            for (int c = 0; c < Board::SIZE; ++c) {
+                Side s = board.get({r, c});
+                if (s == Side::Black) outfile << "X ";
+                else if (s == Side::White) outfile << "O ";
+                else outfile << ". ";
+            }
+            outfile << "\n";
+        }
+        outfile.close();
+        std::cout << "Game saved to " << filename << "\n";
+    } else {
+        std::cout << "Failed to save game.\n";
+    }
 }

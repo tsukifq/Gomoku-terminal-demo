@@ -20,6 +20,5 @@ private:
     Renderer renderer;
 
     void setup();
-    void loop();
-    Action getPlayerActionWithTimeout(Player* player, int timeoutSeconds);
+    void saveGameRecord();
 };

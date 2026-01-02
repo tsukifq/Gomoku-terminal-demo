@@ -9,11 +9,15 @@ void GomokuRuleSet::initGame(GameContext& ctx, Board& board) const {
     ctx.blackTimeoutWarnings = 0;
     ctx.whiteTimeoutWarnings = 0;
     ctx.pendingForbidden = false;
+    ctx.history.clear();
     
     // 黑棋从天元 (7, 7) 开始
     Pos center = {7, 7};
     board.set(center, Side::Black);
-    ctx.lastAction = Action{ActionType::Place, center, std::chrono::milliseconds(0)};
+    Action firstAction = Action{ActionType::Place, center, std::chrono::milliseconds(0)};
+    ctx.lastAction = firstAction;
+    ctx.history.push_back({Side::Black, firstAction});
+
     ctx.turnIndex = 1;
     ctx.toMove = Side::White;
 }

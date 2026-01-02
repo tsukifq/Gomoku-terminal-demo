@@ -46,4 +46,7 @@ struct GameContext {
     // If Black plays a forbidden move, we store it here.
     // If White claims, White wins. If White plays elsewhere, this is cleared.
     bool pendingForbidden = false; 
+
+    // Move history
+    std::vector<std::pair<Side, Action>> history;
 };
