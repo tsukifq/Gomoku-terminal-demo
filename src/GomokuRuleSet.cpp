@@ -58,7 +58,7 @@ bool GomokuRuleSet::validateAction(const GameContext& ctx, const Board& board, S
         // 根据规则，白棋第一手应在天元为界自己一侧布子
         if (side == Side::White && ctx.turnIndex == 1) {
             if (p.r < 7) {
-                reason = "Rule: White must play on your own side of the board(row >= 7) on first move.";
+                reason = "规则: 白方第一手必须下在自己的半场（行 >= 7）。";
                 return false;
             }
         }
@@ -129,7 +129,7 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
         if (isFive || isOverline) {
             outcome.status = GameStatus::Win;
             outcome.winner = Side::White;
-            outcome.reason = isOverline ? "White Long Chain (Win)" : "White Five";
+            outcome.reason = isOverline ? "白方长连 (胜)" : "白方五连";
             return outcome;
         }
     } else {
@@ -137,7 +137,7 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
             // 五连优先：即使是禁手，只要成五就算赢。
             outcome.status = GameStatus::Win;
             outcome.winner = Side::Black;
-            outcome.reason = "Black Five";
+            outcome.reason = "黑方五连";
             return outcome;
         }
         
@@ -180,19 +180,19 @@ Outcome GomokuRuleSet::onTimeout(GameContext& ctx, Side side) const {
 bool GomokuRuleSet::isForbidden(const Board& board, Pos p, std::string& reason) const {
     // 1. 长连
     if (checkOverline(board, p)) {
-        reason = "Overline (6+)";
+        reason = "长连 (6+)";
         return true;
     }
     
     // 2. 三三
     if (checkThreeThree(board, p)) {
-        reason = "Three-Three";
+        reason = "三三禁手";
         return true;
     }
     
     // 3. 四四
     if (checkFourFour(board, p)) {
-        reason = "Four-Four";
+        reason = "四四禁手";
         return true;
     }
     

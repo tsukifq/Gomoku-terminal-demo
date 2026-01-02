@@ -4,36 +4,30 @@
 #include <random>
 #include <limits>
 
-// Minimax with Alpha-Beta Pruning
-// Depth limit controlled by difficulty
-// Easy: Depth 1 (Greedy)
-// Medium: Depth 2
-// Hard: Depth 4 (Slow but smart)
+// 带Alpha-Beta剪枝的极大极小算法
+// 搜索深度由难度控制
+// 简单: 深度 1 (贪婪)
+// 中等: 深度 2
+// 困难: 深度 4 (聪明)
 
 long long evaluateBoard(const Board& board, Side mySide, Side oppSide) {
     long long score = 0;
     int dirs[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
 
-    // Scan entire board (inefficient but simple)
-    // Better: Scan only lines with stones.
-    // For now, let's just use a simplified evaluation:
-    // Iterate all empty spots? No, that's for move generation.
-    // Iterate all stones? Yes.
-    
-    // Actually, let's stick to the previous heuristic logic but apply it to the leaf node state.
-    // But evaluating the whole board from scratch is slow.
-    // Let's just evaluate "potential" of the board for mySide vs oppSide.
+    // 扫描整个棋盘（效率较低）
+    // 只扫描有棋子的线
+    // 使用简化的评估，只评估棋盘对 mySide 与 oppSide 的“潜力”。
     
     auto evaluatePos = [&](Pos p, Side side) -> long long {
         long long s = 0;
         for (auto& d : dirs) {
             int count = 1;
             int r, c;
-            // Forward
+            // 正向
             r = p.r + d[0]; c = p.c + d[1];
             while (board.isValid({r, c}) && board.get({r, c}) == side) { count++; r += d[0]; c += d[1]; }
             bool open1 = board.isValid({r, c}) && board.isEmpty({r, c});
-            // Backward
+            // 反向
             r = p.r - d[0]; c = p.c - d[1];
             while (board.isValid({r, c}) && board.get({r, c}) == side) { count++; r -= d[0]; c -= d[1]; }
             bool open2 = board.isValid({r, c}) && board.isEmpty({r, c});
@@ -66,16 +60,16 @@ long long evaluateBoard(const Board& board, Side mySide, Side oppSide) {
     return score;
 }
 
-// Get candidate moves (sorted by proximity to center/stones)
+// 获取候选走法（按距离中心/棋子的远近排序）
 std::vector<Pos> getCandidates(const Board& board) {
     std::vector<Pos> moves;
     for (int r = 0; r < Board::SIZE; ++r) {
         for (int c = 0; c < Board::SIZE; ++c) {
             Pos p = {r, c};
             if (board.isEmpty(p)) {
-                // Optimization: Only consider moves within 2 steps of existing stones
+                // 剪枝：只考虑现有棋子周围 2 步范围内的走法
                 bool neighbor = false;
-                if (board.get({7,7}) == Side::None && r==7 && c==7) { moves.push_back(p); continue; } // Center always candidate
+                if (board.get({7,7}) == Side::None && r==7 && c==7) { moves.push_back(p); continue; } // 中心点总是候选
 
                 for (int dr = -2; dr <= 2; ++dr) {
                     for (int dc = -2; dc <= 2; ++dc) {
@@ -106,20 +100,11 @@ long long minimax(Board& board, int depth, long long alpha, long long beta, bool
     if (maximizingPlayer) {
         long long maxEval = -std::numeric_limits<long long>::max();
         for (const auto& p : moves) {
-            // Forbidden check for Black
+            // 黑方禁手检查
             if (mySide == Side::Black && rules) {
                 std::string reason;
-                // Note: isForbidden checks if placing at p creates forbidden pattern.
-                // We need to temporarily place it? No, isForbidden assumes p is the move.
-                // But isForbidden uses board state.
-                // My implementation of isForbidden assumes p is NOT on board yet?
-                // Let's check GomokuRuleSet.cpp again.
-                // It calls checkOverline -> countConsecutive.
-                // countConsecutive counts EXISTING stones.
-                // So if we haven't placed stone yet, countConsecutive returns 0 for p.
-                // So isForbidden logic needs to be careful.
-                // Actually, for simplicity in Minimax, let's skip forbidden check deep in tree or assume simple heuristic.
-                // Or just check it:
+                // isForbidden 检查在 p 点落子是否会形成禁手模式。
+                // 实际上，为了简化 Minimax，在树的深层会跳过禁手检查或假设简单的启发式。
                 if (rules->isForbidden(board, p, reason)) continue; 
             }
 
@@ -134,7 +119,7 @@ long long minimax(Board& board, int depth, long long alpha, long long beta, bool
     } else {
         long long minEval = std::numeric_limits<long long>::max();
         for (const auto& p : moves) {
-            // Forbidden check for Opponent (if Black)
+            // 对手禁手检查（如果对手是黑方）
             if (oppSide == Side::Black && rules) {
                 std::string reason;
                 if (rules->isForbidden(board, p, reason)) continue;
@@ -172,27 +157,27 @@ Action AIPlayer::getAction(const GameContext& ctx, const Board& board, const Rul
     Pos bestMove = {-1, -1};
     long long bestScore = -std::numeric_limits<long long>::max();
 
-    // Root level search
-    // Time limit check could be added here
+    // 根节点搜索
+    // 可以在此处添加时间限制检查
     auto startTime = std::chrono::steady_clock::now();
-    int timeLimitMs = 15000; // 15s limit
+    int timeLimitMs = 15000; // 15秒限制
     if (difficulty == 1) timeLimitMs = 1000;
     if (difficulty == 2) timeLimitMs = 5000;
 
     for (const auto& p : moves) {
-        // Check time
+        // 检查时间
         auto now = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() > timeLimitMs) {
-            if (bestMove.r == -1) bestMove = p; // Ensure we have a move
+            if (bestMove.r == -1) bestMove = p;
             break; 
         }
 
-        // Rule: White must play on their own side (row >= 7) on first move
+        // 规则：白方第一手必须下在自己的半场（行 >= 7）
         if (mySide == Side::White && ctx.turnIndex == 1) {
             if (p.r < 7) continue;
         }
         
-        // Forbidden check
+        // 禁手检查
         if (mySide == Side::Black && gomokuRules) {
             std::string reason;
             if (gomokuRules->isForbidden(simBoard, p, reason)) continue;

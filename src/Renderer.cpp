@@ -19,6 +19,23 @@ void Renderer::render(const GameContext& ctx, const Board& board, const std::str
     }
     ss << "\033[K\n"; // Clear rest of line
 
+    auto getGridChar = [](int r, int c) -> std::string {
+        if (r == 0) {
+            if (c == 0) return "┌";
+            if (c == Board::SIZE - 1) return "┐";
+            return "┬";
+        }
+        if (r == Board::SIZE - 1) {
+            if (c == 0) return "└";
+            if (c == Board::SIZE - 1) return "┘";
+            return "┴";
+        }
+        if (c == 0) return "├";
+        if (c == Board::SIZE - 1) return "┤";
+        if (r == 7 && c == 7) return "╋";
+        return "┼";
+    };
+
     for (int r = 0; r < Board::SIZE; ++r) {
         ss << std::setw(2) << (r + 1) << " "; // 1-based index
         for (int c = 0; c < Board::SIZE; ++c) {
@@ -30,19 +47,29 @@ void Renderer::render(const GameContext& ctx, const Board& board, const std::str
                 if (ctx.lastAction->pos.value() == p) isLast = true;
             }
 
+            std::string symbol;
             if (s == Side::Black) {
-                ss << (isLast ? "x " : "X ");
+                symbol = "○";
             } else if (s == Side::White) {
-                ss << (isLast ? "o " : "O ");
+                symbol = "●";
             } else {
-                if (p.r == 7 && p.c == 7) ss << "+ "; // Center
-                else ss << ". ";
+                symbol = getGridChar(r, c);
+            }
+
+            if (isLast) {
+                ss << "\033[31m" << symbol << "\033[0m"; // Red highlight
+            } else {
+                ss << symbol;
+            }
+
+            if (c < Board::SIZE - 1) {
+                ss << "─";
             }
         }
         ss << "\033[K\n"; // Clear rest of line
     }
 
-    ss << "\033[K\nTurn: " << ctx.turnIndex << " | To Move: " << (ctx.toMove == Side::Black ? "Black (X)" : "White (O)") << "\033[K\n";
+    ss << "\033[K\nTurn: " << ctx.turnIndex << " | To Move: " << (ctx.toMove == Side::Black ? "Black (○)" : "White (●)") << "\033[K\n";
     
     // Format Global Time
     long long elapsed = ctx.elapsedGameSeconds;

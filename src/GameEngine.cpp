@@ -18,7 +18,7 @@ GameEngine::GameEngine() {
 
 void GameEngine::setup() {
     while (true) {
-        // flush terminal
+        // 清空终端
         std::cout << "\033[2J\033[H";
         
         std::cout << "Gomoku terminal demo\n";
@@ -39,7 +39,7 @@ void GameEngine::setup() {
 
         if (choice == 4) {
             loadAndReplay();
-            continue; // Show menu again
+            continue; // 再次显示菜单
         }
 
         int aiLevel = 2; // Default Medium
@@ -99,12 +99,12 @@ void GameEngine::run() {
         
         // 超时检测
         if (ctx.elapsedGameSeconds >= ctx.totalGameDurationSeconds) {
-            renderer.render(ctx, board, "Time limit reached (30 min). Taking a 10 minute break...", "");
-            std::this_thread::sleep_for(std::chrono::seconds(2)); // Simulate break start
+            renderer.render(ctx, board, "时间限制已到 (30 分钟). 休息 10 分钟...", "");
+            std::this_thread::sleep_for(std::chrono::seconds(2)); // 模拟休息开始
             
             // 加时逻辑
-            std::cout << "\n\n[System] 10 Minute Rest Period Complete.\n";
-            std::cout << "Select Overtime:\n1. 5 Minutes\n2. 10 Minutes\nChoice: ";
+            std::cout << "\n\n[系统] 10 分钟休息结束。\n";
+            std::cout << "选择加时:\n1. 5 分钟\n2. 10 分钟\n选择: ";
             
             int otChoice;
             // Clear input buffer
@@ -128,7 +128,7 @@ void GameEngine::run() {
         bool actionReceived = false;
         
         if (isHuman) {
-            // Polling 等待玩家输入
+            // 轮询等待玩家输入
             std::string currentInput = "";
             auto periodStart = std::chrono::steady_clock::now();
             const int timeLimitSeconds = 15;
@@ -143,9 +143,9 @@ void GameEngine::run() {
                 // 更新时间
                 ctx.elapsedGameSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - gameStart).count();
 
-                // Redraw if time changed or input changed (we redraw on input below)
-                if (remaining != lastRemaining || (ctx.elapsedGameSeconds % 60 == 0)) { // Update at least every second
-                    std::string timeMsg = message + " [Move Time: " + std::to_string(remaining) + "s]";
+                // 如果时间改变或输入改变则重绘（我们在下面输入时重绘）
+                if (remaining != lastRemaining || (ctx.elapsedGameSeconds % 60 == 0)) { // 至少每秒更新一次
+                    std::string timeMsg = message + " [step time left: " + std::to_string(remaining) + "s]";
                     renderer.render(ctx, board, timeMsg, currentInput);
                     lastRemaining = remaining;
                 }
@@ -171,19 +171,19 @@ void GameEngine::run() {
                 }
                 
                 if (elapsed >= timeLimitSeconds && !actionReceived) {
-                     // Timeout
+                     // 超时
                     Outcome outcome = rules->onTimeout(ctx, ctx.toMove);
                     message = outcome.reason;
                     if (outcome.status == GameStatus::TimeoutLose) {
-                        renderer.render(ctx, board, "TIMEOUT LOSE! " + message, currentInput);
+                        renderer.render(ctx, board, "超时判负! " + message, currentInput);
                         running = false;
-                        std::cout << "\nGame Over (Timeout). Press Enter to exit.\n";
+                        std::cout << "\n游戏结束 (超时). 按回车键退出。\n";
                         break; 
                     } else {
-                        // Warning
+                        // 警告
                         periodStart = std::chrono::steady_clock::now();
                         lastRemaining = -1; 
-                        message = "TIMEOUT WARNING! " + outcome.reason;
+                        message = "超时警告! " + outcome.reason;
                     }
                 }
                 
@@ -360,13 +360,34 @@ void GameEngine::saveGameRecord() {
         for (int c = 0; c < Board::SIZE; ++c) outfile << (char)('A' + c) << " ";
         outfile << "\n";
         
+        auto getGridChar = [](int r, int c) -> std::string {
+            if (r == 0) {
+                if (c == 0) return "┌";
+                if (c == Board::SIZE - 1) return "┐";
+                return "┬";
+            }
+            if (r == Board::SIZE - 1) {
+                if (c == 0) return "└";
+                if (c == Board::SIZE - 1) return "┘";
+                return "┴";
+            }
+            if (c == 0) return "├";
+            if (c == Board::SIZE - 1) return "┤";
+            if (r == 7 && c == 7) return "╋";
+            return "┼";
+        };
+
         for (int r = 0; r < Board::SIZE; ++r) {
             outfile << (r + 1 < 10 ? " " : "") << (r + 1) << " ";
             for (int c = 0; c < Board::SIZE; ++c) {
                 Side s = board.get({r, c});
-                if (s == Side::Black) outfile << "X ";
-                else if (s == Side::White) outfile << "O ";
-                else outfile << ". ";
+                std::string symbol;
+                if (s == Side::Black) symbol = "○";
+                else if (s == Side::White) symbol = "●";
+                else symbol = getGridChar(r, c);
+                
+                outfile << symbol;
+                if (c < Board::SIZE - 1) outfile << "─";
             }
             outfile << "\n";
         }
@@ -471,9 +492,8 @@ void GameEngine::loadAndReplay() {
         // Render
         GameContext dummyCtx; // Just for rendering
         dummyCtx.toMove = (currentStep < moves.size()) ? moves[currentStep].first : Side::None;
-        // We can't easily use renderer.render because it clears screen and prints specific UI.
-        // Let's manually render or reuse renderer with a custom message.
-        
+
+        // manually render or reuse renderer with a custom message.
         std::string msg = "Replay Mode: Step " + std::to_string(currentStep) + "/" + std::to_string(moves.size());
         msg += " | [<-] Prev  [->] Next  [Q] Quit";
         renderer.render(dummyCtx, replayBoard, msg, "");
