@@ -1,0 +1,26 @@
+# Build directories
+/build/
+build/
+build/*
+
+# VS Code
+.vscode/
+
+# Build artifacts
+*.exe
+*.dll
+*.obj
+*.o
+*.lib
+*.a
+*.pdb
+*.ilk
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Logs
+*.log
