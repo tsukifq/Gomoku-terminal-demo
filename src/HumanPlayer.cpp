@@ -46,6 +46,10 @@ Action HumanPlayer::parseCommand(const std::string& input) {
         action.type = ActionType::OfferDraw;
         return action;
     }
+    if (lower == "undo") {
+        action.type = ActionType::Undo;
+        return action;
+    }
 
     // Parse coordinate: Letter + Number (e.g., H8 or 8H)
     int r = -1, c = -1;

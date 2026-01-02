@@ -21,4 +21,5 @@ private:
 
     void setup();
     void saveGameRecord();
+    void loadAndReplay();
 };

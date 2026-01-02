@@ -12,7 +12,7 @@ struct Pos {
     bool operator==(const Pos& other) const { return r == other.r && c == other.c; }
 };
 
-enum class ActionType { Place, Resign, ClaimForbidden, OfferDraw, AcceptDraw, RejectDraw };
+enum class ActionType { Place, Resign, ClaimForbidden, OfferDraw, AcceptDraw, RejectDraw, Undo };
 
 struct Action {
     ActionType type;

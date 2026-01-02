@@ -30,8 +30,11 @@ Side Board::get(Pos p) const {
 
 void Board::set(Pos p, Side s) {
     if (isValid(p)) {
-        if (grid[p.r][p.c] == Side::None && s != Side::None) stoneCount++;
-        else if (grid[p.r][p.c] != Side::None && s == Side::None) stoneCount--;
+        if (grid[p.r][p.c] == Side::None && s != Side::None) {
+            stoneCount++;
+        } else if (grid[p.r][p.c] != Side::None && s == Side::None) {
+            stoneCount--;
+        }
         grid[p.r][p.c] = s;
     }
 }

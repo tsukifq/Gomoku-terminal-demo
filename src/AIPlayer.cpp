@@ -2,104 +2,186 @@
 #include <vector>
 #include <algorithm>
 #include <random>
+#include <limits>
 
-Action AIPlayer::getAction(const GameContext& ctx, const Board& board, const RuleSet& rules) {
-    Action action;
-    action.type = ActionType::Place;
-    action.spent = std::chrono::milliseconds(100); // 模拟思考时间
+// Minimax with Alpha-Beta Pruning
+// Depth limit
+const int MAX_DEPTH = 2; // Keep it small for demo performance, 4 is better but slower without optimization
 
-    Side mySide = ctx.toMove;
-    Side oppSide = (mySide == Side::Black) ? Side::White : Side::Black;
+long long evaluateBoard(const Board& board, Side mySide, Side oppSide) {
+    long long score = 0;
+    int dirs[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+
+    // Scan entire board (inefficient but simple)
+    // Better: Scan only lines with stones.
+    // For now, let's just use a simplified evaluation:
+    // Iterate all empty spots? No, that's for move generation.
+    // Iterate all stones? Yes.
     
-    const GomokuRuleSet* gomokuRules = dynamic_cast<const GomokuRuleSet*>(&rules);
+    // Actually, let's stick to the previous heuristic logic but apply it to the leaf node state.
+    // But evaluating the whole board from scratch is slow.
+    // Let's just evaluate "potential" of the board for mySide vs oppSide.
+    
+    auto evaluatePos = [&](Pos p, Side side) -> long long {
+        long long s = 0;
+        for (auto& d : dirs) {
+            int count = 1;
+            int r, c;
+            // Forward
+            r = p.r + d[0]; c = p.c + d[1];
+            while (board.isValid({r, c}) && board.get({r, c}) == side) { count++; r += d[0]; c += d[1]; }
+            bool open1 = board.isValid({r, c}) && board.isEmpty({r, c});
+            // Backward
+            r = p.r - d[0]; c = p.c - d[1];
+            while (board.isValid({r, c}) && board.get({r, c}) == side) { count++; r -= d[0]; c -= d[1]; }
+            bool open2 = board.isValid({r, c}) && board.isEmpty({r, c});
+            
+            if (count >= 5) s += 100000000;
+            else if (count == 4) {
+                if (open1 && open2) s += 1000000;
+                else if (open1 || open2) s += 100000;
+            }
+            else if (count == 3) {
+                if (open1 && open2) s += 100000;
+                else if (open1 || open2) s += 1000;
+            }
+            else if (count == 2) {
+                if (open1 && open2) s += 100;
+                else if (open1 || open2) s += 10;
+            }
+        }
+        return s;
+    };
 
+    for (int r = 0; r < Board::SIZE; ++r) {
+        for (int c = 0; c < Board::SIZE; ++c) {
+            Pos p = {r, c};
+            Side s = board.get(p);
+            if (s == mySide) score += evaluatePos(p, mySide);
+            else if (s == oppSide) score -= evaluatePos(p, oppSide);
+        }
+    }
+    return score;
+}
+
+// Get candidate moves (sorted by proximity to center/stones)
+std::vector<Pos> getCandidates(const Board& board) {
     std::vector<Pos> moves;
-    // 生成所有合法走法
     for (int r = 0; r < Board::SIZE; ++r) {
         for (int c = 0; c < Board::SIZE; ++c) {
             Pos p = {r, c};
             if (board.isEmpty(p)) {
-                moves.push_back(p);
+                // Optimization: Only consider moves within 2 steps of existing stones
+                bool neighbor = false;
+                if (board.get({7,7}) == Side::None && r==7 && c==7) { moves.push_back(p); continue; } // Center always candidate
+
+                for (int dr = -2; dr <= 2; ++dr) {
+                    for (int dc = -2; dc <= 2; ++dc) {
+                        if (dr==0 && dc==0) continue;
+                        Pos n = {r+dr, c+dc};
+                        if (board.isValid(n) && !board.isEmpty(n)) {
+                            neighbor = true;
+                            break;
+                        }
+                    }
+                    if (neighbor) break;
+                }
+                if (neighbor) moves.push_back(p);
             }
         }
     }
+    return moves;
+}
 
+long long minimax(Board& board, int depth, long long alpha, long long beta, bool maximizingPlayer, Side mySide, Side oppSide, const GomokuRuleSet* rules) {
+    if (depth == 0) {
+        return evaluateBoard(board, mySide, oppSide);
+    }
+
+    std::vector<Pos> moves = getCandidates(board);
+    if (moves.empty()) return 0;
+
+    if (maximizingPlayer) {
+        long long maxEval = -std::numeric_limits<long long>::max();
+        for (const auto& p : moves) {
+            // Forbidden check for Black
+            if (mySide == Side::Black && rules) {
+                std::string reason;
+                // Note: isForbidden checks if placing at p creates forbidden pattern.
+                // We need to temporarily place it? No, isForbidden assumes p is the move.
+                // But isForbidden uses board state.
+                // My implementation of isForbidden assumes p is NOT on board yet?
+                // Let's check GomokuRuleSet.cpp again.
+                // It calls checkOverline -> countConsecutive.
+                // countConsecutive counts EXISTING stones.
+                // So if we haven't placed stone yet, countConsecutive returns 0 for p.
+                // So isForbidden logic needs to be careful.
+                // Actually, for simplicity in Minimax, let's skip forbidden check deep in tree or assume simple heuristic.
+                // Or just check it:
+                if (rules->isForbidden(board, p, reason)) continue; 
+            }
+
+            board.set(p, mySide);
+            long long eval = minimax(board, depth - 1, alpha, beta, false, mySide, oppSide, rules);
+            board.clear(p); // Backtrack
+            maxEval = std::max(maxEval, eval);
+            alpha = std::max(alpha, eval);
+            if (beta <= alpha) break;
+        }
+        return maxEval;
+    } else {
+        long long minEval = std::numeric_limits<long long>::max();
+        for (const auto& p : moves) {
+            // Forbidden check for Opponent (if Black)
+            if (oppSide == Side::Black && rules) {
+                std::string reason;
+                if (rules->isForbidden(board, p, reason)) continue;
+            }
+
+            board.set(p, oppSide);
+            long long eval = minimax(board, depth - 1, alpha, beta, true, mySide, oppSide, rules);
+            board.clear(p); // Backtrack
+            minEval = std::min(minEval, eval);
+            beta = std::min(beta, eval);
+            if (beta <= alpha) break;
+        }
+        return minEval;
+    }
+}
+
+Action AIPlayer::getAction(const GameContext& ctx, const Board& board, const RuleSet& rules) {
+    Action action;
+    action.type = ActionType::Place;
+    action.spent = std::chrono::milliseconds(100); 
+
+    Side mySide = ctx.toMove;
+    Side oppSide = (mySide == Side::Black) ? Side::White : Side::Black;
+    const GomokuRuleSet* gomokuRules = dynamic_cast<const GomokuRuleSet*>(&rules);
+
+    // Clone board for simulation
+    Board simBoard = board; 
+
+    std::vector<Pos> moves = getCandidates(simBoard);
+    
     Pos bestMove = {-1, -1};
-    long long bestScore = -1000000000;
+    long long bestScore = -std::numeric_limits<long long>::max();
 
-    // 简单启发式评估
-    auto evaluateLine = [&](Pos p, int dr, int dc, Side side) -> int {
-        int count = 1;
-        int r, c;
-        
-        // 向前搜索
-        r = p.r + dr; c = p.c + dc;
-        while (board.isValid({r, c}) && board.get({r, c}) == side) {
-            count++; r += dr; c += dc;
-        }
-        bool open1 = board.isValid({r, c}) && board.isEmpty({r, c});
-        
-        // 向后搜索
-        r = p.r - dr; c = p.c - dc;
-        while (board.isValid({r, c}) && board.get({r, c}) == side) {
-            count++; r -= dr; c -= dc;
-        }
-        bool open2 = board.isValid({r, c}) && board.isEmpty({r, c});
-        
-        if (count >= 5) return 100000000;
-        if (count == 4) {
-            if (open1 && open2) return 1000000; // 活四
-            if (open1 || open2) return 100000;  // 冲四
-        }
-        if (count == 3) {
-            if (open1 && open2) return 100000;  // 活三
-            if (open1 || open2) return 1000;    // 眠三
-        }
-        if (count == 2) {
-            if (open1 && open2) return 100;     // 活二
-            if (open1 || open2) return 10;      // 眠二
-        }
-        return 0;
-    };
-
+    // Root level search
     for (const auto& p : moves) {
-        // 规则：白棋第一手必须下在己方半场（行号 >= 7）
+        // Rule: White must play on their own side (row >= 7) on first move
         if (mySide == Side::White && ctx.turnIndex == 1) {
             if (p.r < 7) continue;
         }
-
-        long long score = 0;
-        long long myScore = 0;
-        long long oppScore = 0;
         
-        int dirs[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
-
-        // 1. 评估己方进攻
-        for (auto& d : dirs) {
-            myScore += evaluateLine(p, d[0], d[1], mySide);
-        }
-
-        // 2. 检查禁手（仅在不能立即获胜时检查）
-        // 五连优先：如果成五，无论是否禁手都算赢。
-        bool isWin = (myScore >= 100000000);
-        if (!isWin && mySide == Side::Black && gomokuRules) {
+        // Forbidden check
+        if (mySide == Side::Black && gomokuRules) {
             std::string reason;
-            if (gomokuRules->isForbidden(board, p, reason)) {
-                continue; // 跳过禁手
-            }
+            if (gomokuRules->isForbidden(simBoard, p, reason)) continue;
         }
 
-        // 3. 评估对手进攻（防守）
-        for (auto& d : dirs) {
-            oppScore += evaluateLine(p, d[0], d[1], oppSide);
-        }
-
-        // 综合评分。己方获胜的优先级略高于防守。
-        score = myScore + (long long)(oppScore * 0.9);
-
-        // 4. 位置评分（偏向中心）
-        int dist = std::abs(p.r - 7) + std::abs(p.c - 7);
-        score += (30 - dist);
+        simBoard.set(p, mySide);
+        long long score = minimax(simBoard, MAX_DEPTH, -std::numeric_limits<long long>::max(), std::numeric_limits<long long>::max(), false, mySide, oppSide, gomokuRules);
+        simBoard.clear(p);
 
         if (score > bestScore) {
             bestScore = score;

@@ -25,20 +25,39 @@ void GameEngine::setup() {
     std::cout << "1. Human vs Human\n";
     std::cout << "2. Human vs AI (Human is Black)\n";
     std::cout << "3. AI vs Human (Human is White)\n";
+    std::cout << "4. Load Replay\n";
     std::cout << "Choice: ";
     
     int choice;
     if (!(std::cin >> choice)) choice = 1;
     std::cin.ignore();
 
+    if (choice == 4) {
+        loadAndReplay();
+        // Replay finished, force setup again
+        needSetup = true;
+        continue; // Restart loop to show setup again
+    }
+
+    int aiLevel = 2; // Default Medium
+    if (choice == 2 || choice == 3) {
+        std::cout << "Select AI Difficulty:\n";
+        std::cout << "1. Easy (Fast)\n";
+        std::cout << "2. Medium (Balanced)\n";
+        std::cout << "3. Hard (Slow)\n";
+        std::cout << "Choice: ";
+        if (!(std::cin >> aiLevel)) aiLevel = 2;
+        std::cin.ignore();
+    }
+
     if (choice == 1) {
         blackPlayer = std::make_unique<HumanPlayer>();
         whitePlayer = std::make_unique<HumanPlayer>();
     } else if (choice == 2) {
         blackPlayer = std::make_unique<HumanPlayer>();
-        whitePlayer = std::make_unique<AIPlayer>();
+        whitePlayer = std::make_unique<AIPlayer>(aiLevel);
     } else {
-        blackPlayer = std::make_unique<AIPlayer>();
+        blackPlayer = std::make_unique<AIPlayer>(aiLevel);
         whitePlayer = std::make_unique<HumanPlayer>();
     }
 
@@ -178,6 +197,49 @@ void GameEngine::run() {
 
         if (!running) break;
 
+        if (action.type == ActionType::Undo) {
+            // Undo Logic
+            int undoSteps = 0;
+            bool isPvE = (blackPlayer->name() == "AI" || whitePlayer->name() == "AI");
+            
+            if (isPvE) {
+                // In PvE, undo 2 steps to get back to human turn
+                // Unless only 1 move has been made (e.g. Black Human played, then undo immediately before White AI moves? 
+                // No, AI moves immediately. So usually we are at turnIndex N.
+                // If it's Human's turn, it means AI just moved? No.
+                // Wait. If it is Human's turn, the LAST move was AI.
+                // So if Human says "undo", they want to undo AI's move AND their own previous move.
+                undoSteps = 2;
+            } else {
+                // PvP: Undo 1 step
+                undoSteps = 1;
+            }
+
+            if (ctx.history.size() < undoSteps) {
+                message = "Cannot undo: Not enough history.";
+                continue;
+            }
+
+            for (int i = 0; i < undoSteps; ++i) {
+                auto last = ctx.history.back();
+                ctx.history.pop_back();
+                if (last.second.type == ActionType::Place && last.second.pos.has_value()) {
+                    board.clear(last.second.pos.value());
+                }
+                // Revert context
+                ctx.turnIndex--;
+                ctx.toMove = (ctx.toMove == Side::Black) ? Side::White : Side::Black;
+                // Reset warnings/phase if needed? 
+                // Simplifying: Just keep warnings. Phase might need revert if we crossed opening.
+                if (ctx.turnIndex <= 2) ctx.phase = Phase::Opening;
+                else ctx.phase = Phase::Normal;
+                ctx.pendingForbidden = false; // Clear pending claim
+            }
+            
+            message = "Undo successful.";
+            continue;
+        }
+
         // 落子后的判定逻辑
         std::string reason;
         if (!rules->validateAction(ctx, board, ctx.toMove, action, reason)) {
@@ -188,7 +250,7 @@ void GameEngine::run() {
         Side justMoved = ctx.toMove;
 
         rules->applyAction(ctx, board, justMoved, action);
-        ctx.history.push_back({justMoved, action});
+        ctx.history.push_back(std::make_pair(justMoved, action));
 
         Outcome outcome = rules->evaluateAfterAction(ctx, board, justMoved, action);
         
@@ -303,5 +365,121 @@ void GameEngine::saveGameRecord() {
         std::cout << "Game saved to " << filename << "\n";
     } else {
         std::cout << "Failed to save game.\n";
+    }
+}
+
+void GameEngine::loadAndReplay() {
+    std::string dir = "../match";
+    if (!fs::exists(dir)) {
+        std::cout << "No match records found.\n";
+        std::cout << "Press Enter to return.\n";
+        std::cin.get();
+        return;
+    }
+
+    std::vector<std::string> files;
+    for (const auto& entry : fs::directory_iterator(dir)) {
+        if (entry.path().extension() == ".txt") {
+            files.push_back(entry.path().string());
+        }
+    }
+
+    if (files.empty()) {
+        std::cout << "No match records found.\n";
+        std::cout << "Press Enter to return.\n";
+        std::cin.get();
+        return;
+    }
+
+    std::cout << "Select Record:\n";
+    for (size_t i = 0; i < files.size(); ++i) {
+        std::cout << (i + 1) << ". " << fs::path(files[i]).filename().string() << "\n";
+    }
+    std::cout << "Choice: ";
+    int choice;
+    if (!(std::cin >> choice) || choice < 1 || choice > (int)files.size()) {
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        return;
+    }
+    std::cin.ignore();
+
+    std::string filepath = files[choice - 1];
+    std::ifstream infile(filepath);
+    if (!infile.is_open()) {
+        std::cout << "Failed to open file.\n";
+        return;
+    }
+
+    // Parse moves
+    std::vector<std::pair<Side, Pos>> moves;
+    std::string line;
+    bool inHistory = false;
+    while (std::getline(infile, line)) {
+        if (line.find("--- Move History ---") != std::string::npos) {
+            inHistory = true;
+            continue;
+        }
+        if (line.find("--- Final Board ---") != std::string::npos) {
+            break;
+        }
+        if (inHistory && !line.empty()) {
+            // Format: "1. Black (7,7) [0ms]"
+            // Simple parsing
+            size_t openParen = line.find('(');
+            size_t comma = line.find(',');
+            size_t closeParen = line.find(')');
+            
+            if (openParen != std::string::npos && comma != std::string::npos && closeParen != std::string::npos) {
+                std::string rStr = line.substr(openParen + 1, comma - openParen - 1);
+                std::string cStr = line.substr(comma + 1, closeParen - comma - 1);
+                
+                try {
+                    int r = std::stoi(rStr);
+                    int c = std::stoi(cStr);
+                    Side s = (line.find("Black") != std::string::npos) ? Side::Black : Side::White;
+                    moves.push_back({s, {r, c}});
+                } catch (...) {}
+            }
+        }
+    }
+    infile.close();
+
+    // Replay Loop
+    Board replayBoard;
+    int currentStep = 0;
+    bool replaying = true;
+    
+    while (replaying) {
+        // Reconstruct board up to currentStep
+        replayBoard.reset();
+        for (int i = 0; i < currentStep; ++i) {
+            if (i < moves.size()) {
+                replayBoard.set(moves[i].second, moves[i].first);
+            }
+        }
+
+        // Render
+        GameContext dummyCtx; // Just for rendering
+        dummyCtx.toMove = (currentStep < moves.size()) ? moves[currentStep].first : Side::None;
+        // We can't easily use renderer.render because it clears screen and prints specific UI.
+        // Let's manually render or reuse renderer with a custom message.
+        
+        std::string msg = "Replay Mode: Step " + std::to_string(currentStep) + "/" + std::to_string(moves.size());
+        msg += " | [<-] Prev  [->] Next  [Q] Quit";
+        renderer.render(dummyCtx, replayBoard, msg, "");
+
+        // Input
+        int ch = _getch();
+        if (ch == 0 || ch == 224) { // Arrow keys
+            ch = _getch();
+            if (ch == 75) { // Left
+                if (currentStep > 0) currentStep--;
+            } else if (ch == 77) { // Right
+                if (currentStep < moves.size()) currentStep++;
+            }
+        } else if (ch == 'q' || ch == 'Q') {
+            replaying = false;
+        }
     }
 }
