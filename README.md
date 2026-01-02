@@ -17,15 +17,17 @@ This is a C++ implementation of the Gomoku game with a command-line interface. I
 ### Prerequisites
 - C++17 compatible compiler (GCC, Clang, MSVC).
 - CMake (optional, but recommended).
+- Windows Operation System for better render performance
 
-### Using CMake
+### Using CMake(Windows MinGW)
 ```bash
 mkdir build
 cd build
-cmake ..
+cmake -G "MinGW Makefiles" ..
 cmake --build .
-./Gomoku
+.\Gomoku.exe
 ```
+
 
 ### Manual Compilation
 ```bash

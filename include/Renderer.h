@@ -5,6 +5,6 @@
 
 class Renderer {
 public:
-    void render(const GameContext& ctx, const Board& board, const std::string& message = "");
+    void render(const GameContext& ctx, const Board& board, const std::string& message = "", const std::string& currentInput = "");
     void clearScreen();
 };

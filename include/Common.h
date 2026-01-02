@@ -38,6 +38,10 @@ struct GameContext {
     int whiteTimeoutWarnings = 0;
     Phase phase = Phase::Opening;
     
+    // Time control
+    long long totalGameDurationSeconds = 1800; // 30 minutes default
+    long long elapsedGameSeconds = 0;
+
     // For pending forbidden claim
     // If Black plays a forbidden move, we store it here.
     // If White claims, White wins. If White plays elsewhere, this is cleared.

@@ -1,26 +1,26 @@
 #include "../include/Renderer.h"
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 void Renderer::clearScreen() {
-#ifdef _WIN32
-    system("cls");
-#else
-    std::cout << "\033[2J\033[1;1H";
-#endif
+    // Do nothing here, handled in render with ANSI codes
 }
 
-void Renderer::render(const GameContext& ctx, const Board& board, const std::string& message) {
-    clearScreen();
+void Renderer::render(const GameContext& ctx, const Board& board, const std::string& message, const std::string& currentInput) {
+    std::stringstream ss;
     
-    std::cout << "   ";
+    // Move cursor to home (0,0)
+    ss << "\033[H";
+
+    ss << "   ";
     for (int c = 0; c < Board::SIZE; ++c) {
-        std::cout << (char)('A' + c) << " ";
+        ss << (char)('A' + c) << " ";
     }
-    std::cout << "\n";
+    ss << "\033[K\n"; // Clear rest of line
 
     for (int r = 0; r < Board::SIZE; ++r) {
-        std::cout << std::setw(2) << (r + 1) << " "; // 1-based index
+        ss << std::setw(2) << (r + 1) << " "; // 1-based index
         for (int c = 0; c < Board::SIZE; ++c) {
             Pos p = {r, c};
             Side s = board.get(p);
@@ -30,26 +30,39 @@ void Renderer::render(const GameContext& ctx, const Board& board, const std::str
                 if (ctx.lastAction->pos.value() == p) isLast = true;
             }
 
-            // 用小写区分最近一次落子
             if (s == Side::Black) {
-                std::cout << (isLast ? "x " : "X ");
+                ss << (isLast ? "x " : "X ");
             } else if (s == Side::White) {
-                std::cout << (isLast ? "o " : "O ");
+                ss << (isLast ? "o " : "O ");
             } else {
-                if (p.r == 7 && p.c == 7) std::cout << "+ "; // Center
-                else std::cout << ". ";
+                if (p.r == 7 && p.c == 7) ss << "+ "; // Center
+                else ss << ". ";
             }
         }
-        std::cout << "\n";
+        ss << "\033[K\n"; // Clear rest of line
     }
 
-    std::cout << "\nTurn: " << ctx.turnIndex << " | To Move: " << (ctx.toMove == Side::Black ? "Black (X)" : "White (O)") << "\n";
-    std::cout << "Warnings - Black: " << ctx.blackTimeoutWarnings << "/3 | White: " << ctx.whiteTimeoutWarnings << "/3\n";
+    ss << "\033[K\nTurn: " << ctx.turnIndex << " | To Move: " << (ctx.toMove == Side::Black ? "Black (X)" : "White (O)") << "\033[K\n";
+    
+    // Format Global Time
+    long long elapsed = ctx.elapsedGameSeconds;
+    long long total = ctx.totalGameDurationSeconds;
+    ss << "Global Time: " << (elapsed / 60) << ":" << std::setw(2) << std::setfill('0') << (elapsed % 60) 
+       << " / " << (total / 60) << ":" << std::setw(2) << std::setfill('0') << (total % 60) << "\033[K\n";
+
+    ss << "Warnings - Black: " << ctx.blackTimeoutWarnings << "/3 | White: " << ctx.whiteTimeoutWarnings << "/3\033[K\n";
     if (ctx.phase == Phase::PendingClaim) {
-        std::cout << "STATUS: PENDING CLAIM! White can type 'claim' to win.\n";
+        ss << "STATUS: PENDING CLAIM! White can type 'claim' to win.\033[K\n";
     }
+    
     if (!message.empty()) {
-        std::cout << "Message: " << message << "\n";
+        ss << "Message: " << message << "\033[K\n";
     }
-    std::cout << "Command: ";
+    
+    ss << "Command: " << currentInput << "\033[K";
+    
+    // Clear from cursor to end of screen (in case output shrank)
+    ss << "\033[J";
+
+    std::cout << ss.str() << std::flush;
 }

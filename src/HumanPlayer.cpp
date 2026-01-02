@@ -6,23 +6,32 @@
 
 Action HumanPlayer::getAction(const GameContext& ctx, const Board& board, const RuleSet& rules) {
     Action action;
-    action.spent = std::chrono::milliseconds(0); // Engine measures time usually, but we can set 0
+    action.spent = std::chrono::milliseconds(0); 
 
     std::string input;
-    // std::cout << "Enter move (e.g. H8), 'claim', or 'q': "; 
-    // Output is handled by Renderer usually, but prompt is needed.
-    // We'll assume Renderer printed the prompt.
-    
     if (!std::getline(std::cin, input)) {
         action.type = ActionType::Resign; // EOF
         return action;
     }
+    return parseCommand(input);
+}
 
-    // Trim
-    input.erase(0, input.find_first_not_of(" \t\n\r"));
-    input.erase(input.find_last_not_of(" \t\n\r") + 1);
-    
+Action HumanPlayer::parseCommand(const std::string& input) {
+    Action action;
+    action.spent = std::chrono::milliseconds(0);
+
     std::string lower = input;
+    // Trim
+    size_t first = lower.find_first_not_of(" \t\n\r");
+    if (first == std::string::npos) {
+        // Empty
+        action.type = ActionType::Place;
+        action.pos = {-1, -1};
+        return action;
+    }
+    size_t last = lower.find_last_not_of(" \t\n\r");
+    lower = lower.substr(first, (last - first + 1));
+    
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
     if (lower == "q" || lower == "quit") {
@@ -39,24 +48,15 @@ Action HumanPlayer::getAction(const GameContext& ctx, const Board& board, const 
     }
 
     // Parse coordinate: Letter + Number (e.g., H8 or 8H)
-    // Standard: Column Letter, Row Number.
-    // A=0, B=1, ... O=14.
-    // 1=0, ... 15=14.
-    
     int r = -1, c = -1;
     
-    // Find letter and number parts
     std::string letters, digits;
-    for (char ch : input) {
+    for (char ch : input) { // Use original input for case-insensitive letter check if needed, but A-O is fine
         if (std::isalpha(ch)) letters += std::toupper(ch);
         else if (std::isdigit(ch)) digits += ch;
     }
     
     if (letters.empty() || digits.empty()) {
-        // Invalid
-        // We can loop here or return invalid action and let Engine ask again?
-        // Better to loop here for UX, but Engine might handle "Invalid action".
-        // Let's return a dummy Place action that is invalid.
         action.type = ActionType::Place;
         action.pos = {-1, -1}; 
         return action;
@@ -64,15 +64,10 @@ Action HumanPlayer::getAction(const GameContext& ctx, const Board& board, const 
     
     c = letters[0] - 'A';
     try {
-        r = std::stoi(digits) - 1; // 1-based to 0-based
+        r = std::stoi(digits) - 1; 
     } catch (...) {
         r = -1;
     }
-    
-    // In Gomoku, usually rows are numbered from bottom (1) to top (15) or top to bottom?
-    // Standard Renju: 15 at top, 1 at bottom? Or matrix style?
-    // Matrix style (1 at top) is easier for CLI.
-    // Let's assume 1 is top row (index 0).
     
     action.type = ActionType::Place;
     action.pos = {r, c};
