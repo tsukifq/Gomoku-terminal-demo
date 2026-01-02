@@ -17,52 +17,61 @@ GameEngine::GameEngine() {
 }
 
 void GameEngine::setup() {
-    // flush terminal
-    std::cout << "\033[2J\033[H";
-    
-    std::cout << "Gomoku terminal demo\n";
-    std::cout << "Select Mode:\n";
-    std::cout << "1. Human vs Human\n";
-    std::cout << "2. Human vs AI (Human is Black)\n";
-    std::cout << "3. AI vs Human (Human is White)\n";
-    std::cout << "4. Load Replay\n";
-    std::cout << "Choice: ";
-    
-    int choice;
-    if (!(std::cin >> choice)) choice = 1;
-    std::cin.ignore();
-
-    if (choice == 4) {
-        loadAndReplay();
-        // Replay finished, force setup again
-        needSetup = true;
-        continue; // Restart loop to show setup again
-    }
-
-    int aiLevel = 2; // Default Medium
-    if (choice == 2 || choice == 3) {
-        std::cout << "Select AI Difficulty:\n";
-        std::cout << "1. Easy (Fast)\n";
-        std::cout << "2. Medium (Balanced)\n";
-        std::cout << "3. Hard (Slow)\n";
+    while (true) {
+        // flush terminal
+        std::cout << "\033[2J\033[H";
+        
+        std::cout << "Gomoku terminal demo\n";
+        std::cout << "Select Mode:\n";
+        std::cout << "1. Human vs Human\n";
+        std::cout << "2. Human vs AI (Human is Black)\n";
+        std::cout << "3. AI vs Human (Human is White)\n";
+        std::cout << "4. Load Replay\n";
         std::cout << "Choice: ";
-        if (!(std::cin >> aiLevel)) aiLevel = 2;
+        
+        int choice;
+        if (!(std::cin >> choice)) {
+            std::cin.clear();
+            std::cin.ignore(10000, '\n');
+            choice = 1;
+        }
         std::cin.ignore();
-    }
 
-    if (choice == 1) {
-        blackPlayer = std::make_unique<HumanPlayer>();
-        whitePlayer = std::make_unique<HumanPlayer>();
-    } else if (choice == 2) {
-        blackPlayer = std::make_unique<HumanPlayer>();
-        whitePlayer = std::make_unique<AIPlayer>(aiLevel);
-    } else {
-        blackPlayer = std::make_unique<AIPlayer>(aiLevel);
-        whitePlayer = std::make_unique<HumanPlayer>();
-    }
+        if (choice == 4) {
+            loadAndReplay();
+            continue; // Show menu again
+        }
 
-    board.reset();
-    rules->initGame(ctx, board);
+        int aiLevel = 2; // Default Medium
+        if (choice == 2 || choice == 3) {
+            std::cout << "Select AI Difficulty:\n";
+            std::cout << "1. Easy (Fast)\n";
+            std::cout << "2. Medium (Balanced)\n";
+            std::cout << "3. Hard (Slow)\n";
+            std::cout << "Choice: ";
+            if (!(std::cin >> aiLevel)) {
+                std::cin.clear();
+                std::cin.ignore(10000, '\n');
+                aiLevel = 2;
+            }
+            std::cin.ignore();
+        }
+
+        if (choice == 1) {
+            blackPlayer = std::make_unique<HumanPlayer>();
+            whitePlayer = std::make_unique<HumanPlayer>();
+        } else if (choice == 2) {
+            blackPlayer = std::make_unique<HumanPlayer>();
+            whitePlayer = std::make_unique<AIPlayer>(aiLevel);
+        } else {
+            blackPlayer = std::make_unique<AIPlayer>(aiLevel);
+            whitePlayer = std::make_unique<HumanPlayer>();
+        }
+
+        board.reset();
+        rules->initGame(ctx, board);
+        break;
+    }
 }
 
 void GameEngine::run() {

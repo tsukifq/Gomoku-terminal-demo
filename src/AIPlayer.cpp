@@ -5,8 +5,10 @@
 #include <limits>
 
 // Minimax with Alpha-Beta Pruning
-// Depth limit
-const int MAX_DEPTH = 2; // Keep it small for demo performance, 4 is better but slower without optimization
+// Depth limit controlled by difficulty
+// Easy: Depth 1 (Greedy)
+// Medium: Depth 2
+// Hard: Depth 4 (Slow but smart)
 
 long long evaluateBoard(const Board& board, Side mySide, Side oppSide) {
     long long score = 0;
@@ -161,13 +163,30 @@ Action AIPlayer::getAction(const GameContext& ctx, const Board& board, const Rul
     // Clone board for simulation
     Board simBoard = board; 
 
+    int maxDepth = 2;
+    if (difficulty == 1) maxDepth = 1;
+    else if (difficulty == 3) maxDepth = 4;
+
     std::vector<Pos> moves = getCandidates(simBoard);
     
     Pos bestMove = {-1, -1};
     long long bestScore = -std::numeric_limits<long long>::max();
 
     // Root level search
+    // Time limit check could be added here
+    auto startTime = std::chrono::steady_clock::now();
+    int timeLimitMs = 15000; // 15s limit
+    if (difficulty == 1) timeLimitMs = 1000;
+    if (difficulty == 2) timeLimitMs = 5000;
+
     for (const auto& p : moves) {
+        // Check time
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() > timeLimitMs) {
+            if (bestMove.r == -1) bestMove = p; // Ensure we have a move
+            break; 
+        }
+
         // Rule: White must play on their own side (row >= 7) on first move
         if (mySide == Side::White && ctx.turnIndex == 1) {
             if (p.r < 7) continue;
@@ -180,7 +199,7 @@ Action AIPlayer::getAction(const GameContext& ctx, const Board& board, const Rul
         }
 
         simBoard.set(p, mySide);
-        long long score = minimax(simBoard, MAX_DEPTH, -std::numeric_limits<long long>::max(), std::numeric_limits<long long>::max(), false, mySide, oppSide, gomokuRules);
+        long long score = minimax(simBoard, maxDepth - 1, -std::numeric_limits<long long>::max(), std::numeric_limits<long long>::max(), false, mySide, oppSide, gomokuRules);
         simBoard.clear(p);
 
         if (score > bestScore) {
