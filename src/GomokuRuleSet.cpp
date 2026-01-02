@@ -97,8 +97,8 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
     }
     
     if (action.type == ActionType::ClaimForbidden) {
-        // White claimed successfully
-        outcome.status = GameStatus::Forbidden; // Or Win
+        // 举手！
+        outcome.status = GameStatus::Forbidden;
         outcome.winner = Side::White;
         outcome.reason = "Forbidden move claimed";
         return outcome;
@@ -108,8 +108,7 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
 
     Pos p = action.pos.value();
 
-    // Check for 5 (Win)
-    // Check 4 directions
+    // 4 directions
     int dirs[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
     bool isFive = false;
     bool isOverline = false;
@@ -130,7 +129,7 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
             outcome.reason = isOverline ? "White Long Chain (Win)" : "White Five";
             return outcome;
         }
-    } else { // Black
+    } else {
         if (isFive) {
             // Five Priority: Even if forbidden, 5 wins.
             outcome.status = GameStatus::Win;
@@ -139,13 +138,10 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
             return outcome;
         }
         
-        // Check Forbidden
+        // 禁手check逻辑
         std::string forbiddenReason;
         if (isForbidden(board, p, forbiddenReason)) {
-            // Black played a forbidden move.
-            // According to requirements: "Enter PendingClaim state"
-            // We cannot modify ctx here (const), but the Engine will see the outcome status.
-            // Wait, evaluate returns Outcome. We need a status for PendingClaim.
+            // a status for PendingClaim.
             outcome.status = GameStatus::PendingClaim;
             outcome.reason = forbiddenReason;
             return outcome;
@@ -172,32 +168,26 @@ Outcome GomokuRuleSet::onTimeout(GameContext& ctx, Side side) const {
         outcome.winner = (side == Side::Black) ? Side::White : Side::Black;
         outcome.reason = "Timeout (Max Warnings)";
     } else {
-        // Just a warning, game continues? 
-        // Usually timeout means lose turn or lose game. 
-        // Requirement: "Timeout warning max 3 times". 
-        // This implies after 3 warnings, the NEXT one is a loss, or the 3rd is a loss?
-        // "Timeout warning max 3 times" -> 4th time is loss.
         outcome.reason = "Timeout Warning " + std::to_string(warnings);
     }
     return outcome;
 }
 
 // --- Forbidden Logic ---
-
 bool GomokuRuleSet::isForbidden(const Board& board, Pos p, std::string& reason) const {
-    // 1. Overline
+    // 1. 长连
     if (checkOverline(board, p)) {
         reason = "Overline (6+)";
         return true;
     }
     
-    // 2. Three-Three
+    // 2. 三三
     if (checkThreeThree(board, p)) {
         reason = "Three-Three";
         return true;
     }
     
-    // 3. Four-Four
+    // 3. 四四
     if (checkFourFour(board, p)) {
         reason = "Four-Four";
         return true;
@@ -217,15 +207,13 @@ bool GomokuRuleSet::checkOverline(const Board& board, Pos p) const {
     return false;
 }
 
-// Helper to get line content: 0=Empty, 1=Self, 2=Opponent/Border
-// We grab a window of size 9 (4 on each side)
 std::vector<int> getLinePattern(const Board& board, Pos p, int dr, int dc) {
     std::vector<int> line;
     // Look back 4
     for (int i = -4; i <= 4; ++i) {
         Pos curr = {p.r + i * dr, p.c + i * dc};
         if (!board.isValid(curr)) {
-            line.push_back(2); // Border
+            line.push_back(2);
         } else {
             Side s = board.get(curr);
             if (s == Side::Black) line.push_back(1);

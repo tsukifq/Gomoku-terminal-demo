@@ -12,10 +12,10 @@ GameEngine::GameEngine() {
 }
 
 void GameEngine::setup() {
-    // Clear screen fully once at start
+    // flush terminal
     std::cout << "\033[2J\033[H";
     
-    std::cout << "Gomoku - C++ Final Assignment\n";
+    std::cout << "Gomoku terminal demo\n";
     std::cout << "Select Mode:\n";
     std::cout << "1. Human vs Human\n";
     std::cout << "2. Human vs AI (Human is Black)\n";
@@ -24,7 +24,7 @@ void GameEngine::setup() {
     
     int choice;
     if (!(std::cin >> choice)) choice = 1;
-    std::cin.ignore(); // Consume newline
+    std::cin.ignore();
 
     if (choice == 1) {
         blackPlayer = std::make_unique<HumanPlayer>();
@@ -48,19 +48,19 @@ void GameEngine::run() {
     std::string message = "Game Start!";
     
     auto gameStart = std::chrono::steady_clock::now();
-    ctx.totalGameDurationSeconds = 1800; // 30 minutes
+    ctx.totalGameDurationSeconds = 1800; // 30 分钟
 
     while (running) {
-        // Update Global Time
+        // 全局计时
         auto nowGlobal = std::chrono::steady_clock::now();
         ctx.elapsedGameSeconds = std::chrono::duration_cast<std::chrono::seconds>(nowGlobal - gameStart).count();
         
-        // Check Global Timeout
+        // 超时检测
         if (ctx.elapsedGameSeconds >= ctx.totalGameDurationSeconds) {
             renderer.render(ctx, board, "Time limit reached (30 min). Taking a 10 minute break...", "");
             std::this_thread::sleep_for(std::chrono::seconds(2)); // Simulate break start
             
-            // In a real app, we might sleep for 10 mins, but here we just prompt.
+            // 加时逻辑
             std::cout << "\n\n[System] 10 Minute Rest Period Complete.\n";
             std::cout << "Select Overtime:\n1. 5 Minutes\n2. 10 Minutes\nChoice: ";
             
@@ -86,7 +86,7 @@ void GameEngine::run() {
         bool actionReceived = false;
         
         if (isHuman) {
-            // Polling loop for Human
+            // Polling 等待玩家输入
             std::string currentInput = "";
             auto periodStart = std::chrono::steady_clock::now();
             const int timeLimitSeconds = 15;
@@ -98,7 +98,7 @@ void GameEngine::run() {
                 int remaining = timeLimitSeconds - elapsed;
                 if (remaining < 0) remaining = 0;
                 
-                // Update global time continuously
+                // 更新时间
                 ctx.elapsedGameSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - gameStart).count();
 
                 // Redraw if time changed or input changed (we redraw on input below)
@@ -111,19 +111,19 @@ void GameEngine::run() {
                 // Check input
                 if (_kbhit()) {
                     int ch = _getch();
-                    if (ch == '\r' || ch == '\n') { // Enter
+                    if (ch == '\r' || ch == '\n') {
                         action = HumanPlayer::parseCommand(currentInput);
                         actionReceived = true;
-                        std::cout << "\n"; // Move to next line
-                    } else if (ch == '\b' || ch == 127) { // Backspace
+                        std::cout << "\n";
+                    } else if (ch == '\b' || ch == 127) {
                         if (!currentInput.empty()) {
                             currentInput.pop_back();
-                            // Force redraw
+                            // redraw
                             lastRemaining = -1; 
                         }
                     } else if (ch >= 32 && ch <= 126) { // Printable
                         currentInput += (char)ch;
-                        // Force redraw
+                        //redraw
                         lastRemaining = -1;
                     }
                 }
@@ -187,7 +187,7 @@ void GameEngine::run() {
              renderer.render(ctx, board, "FORBIDDEN MOVE CLAIMED! White Wins. (" + outcome.reason + ")");
              running = false;
         } else if (outcome.status == GameStatus::PendingClaim) {
-            message = "WARNING: Black played a forbidden move (" + outcome.reason + "). White can 'claim' to win!";
+            message = "WARNING: Black played a forbidden move (" + outcome.reason + "). White can 'claim' to win! Type 'claim' to put up your hands.";
             ctx.phase = Phase::PendingClaim;
             ctx.pendingForbidden = true;
         } else {
