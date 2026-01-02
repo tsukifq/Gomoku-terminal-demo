@@ -39,14 +39,14 @@ g++ -std=c++17 -I./include src/*.cpp main.cpp -o gomoku
 - **Input**: Enter coordinates like `H8` (Column Letter + Row Number).
 - **Commands**:
   - `q` or `quit`: Resign.
-  - `claim`: Claim a forbidden move (only when prompted).
+  - `claim`: Put up your hand to claim a forbidden move (only when prompted).
   - `draw`: Offer draw.
 
 ## Architecture
 - **GameEngine**: Manages the game loop, timing, and player turns.
 - **RuleSet**: Abstract base class for game rules. `GomokuRuleSet` implements specific logic.
 - **Board**: Manages the grid state.
-- **Player**: Abstract base class. `HumanPlayer` handles input, `AIPlayer` uses heuristics.
+- **Player**: Abstract base class. `HumanPlayer` handles input, `AIPlayer` uses heuristic algorithm. It's  smart and quick enough for gomoku game, no need to train a model with only 15seconds per turn.
 - **Renderer**: Handles console output.
 
 ## Forbidden Move Logic
@@ -54,3 +54,4 @@ Implemented using pattern matching in `GomokuRuleSet`.
 - **Overline**: Checks for >5 stones.
 - **Three-Three**: Checks for >=2 "Open Threes" (patterns like `01110`).
 - **Four-Four**: Checks for >=2 "Fours" (patterns that can become Five).
+You can see details in direcroty docs.

@@ -10,7 +10,7 @@ void GomokuRuleSet::initGame(GameContext& ctx, Board& board) const {
     ctx.whiteTimeoutWarnings = 0;
     ctx.pendingForbidden = false;
     
-    // Black starts at Tengen (7, 7)
+    // 黑棋从天元 (7, 7) 开始
     Pos center = {7, 7};
     board.set(center, Side::Black);
     ctx.lastAction = Action{ActionType::Place, center, std::chrono::milliseconds(0)};
@@ -67,7 +67,7 @@ bool GomokuRuleSet::validateAction(const GameContext& ctx, const Board& board, S
 
 void GomokuRuleSet::applyAction(GameContext& ctx, Board& board, Side side, const Action& action) const {
     if (action.type == ActionType::Place) {
-        // If we were in PendingClaim and White played a move (Place), the claim is waived.
+        // 如果处于等待禁手申诉阶段，而白棋落子（Place），则视为放弃申诉。
         if (ctx.phase == Phase::PendingClaim) {
             ctx.phase = Phase::Normal;
             ctx.pendingForbidden = false;
@@ -78,7 +78,6 @@ void GomokuRuleSet::applyAction(GameContext& ctx, Board& board, Side side, const
         ctx.turnIndex++;
         ctx.toMove = (side == Side::Black) ? Side::White : Side::Black;
         
-        // Phase update handled in evaluateAfterAction usually, but here we just update state.
         if (ctx.phase == Phase::Opening && ctx.turnIndex > 2) {
             ctx.phase = Phase::Normal;
         }
@@ -108,7 +107,7 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
 
     Pos p = action.pos.value();
 
-    // 4 directions
+    // 4 个方向
     int dirs[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
     bool isFive = false;
     bool isOverline = false;
@@ -131,17 +130,17 @@ Outcome GomokuRuleSet::evaluateAfterAction(const GameContext& ctx, const Board& 
         }
     } else {
         if (isFive) {
-            // Five Priority: Even if forbidden, 5 wins.
+            // 五连优先：即使是禁手，只要成五就算赢。
             outcome.status = GameStatus::Win;
             outcome.winner = Side::Black;
             outcome.reason = "Black Five";
             return outcome;
         }
         
-        // 禁手check逻辑
+        // 禁手检查逻辑
         std::string forbiddenReason;
         if (isForbidden(board, p, forbiddenReason)) {
-            // a status for PendingClaim.
+            // 等待申诉的状态。
             outcome.status = GameStatus::PendingClaim;
             outcome.reason = forbiddenReason;
             return outcome;
@@ -173,7 +172,7 @@ Outcome GomokuRuleSet::onTimeout(GameContext& ctx, Side side) const {
     return outcome;
 }
 
-// --- Forbidden Logic ---
+// 禁手
 bool GomokuRuleSet::isForbidden(const Board& board, Pos p, std::string& reason) const {
     // 1. 长连
     if (checkOverline(board, p)) {
@@ -209,7 +208,7 @@ bool GomokuRuleSet::checkOverline(const Board& board, Pos p) const {
 
 std::vector<int> getLinePattern(const Board& board, Pos p, int dr, int dc) {
     std::vector<int> line;
-    // Look back 4
+    // 向后看 4 格
     for (int i = -4; i <= 4; ++i) {
         Pos curr = {p.r + i * dr, p.c + i * dc};
         if (!board.isValid(curr)) {
@@ -248,71 +247,70 @@ bool GomokuRuleSet::checkFourFour(const Board& board, Pos p) const {
     return fourCount >= 2;
 }
 
-// Check if placing at p creates an Open Three in direction (dr, dc)
-// An Open Three must be able to form a straight 4.
-// Patterns (1=Self, 0=Empty):
-// 01110 (Standard)
-// 010110 (Broken)
-// 011010 (Broken)
+// 检查在 p 点落子是否在方向 (dr, dc) 上形成活三
+// 活三必须能够形成直四。
+// 模式 (1=己方, 0=空):
+// 01110 (标准)
+// 010110 (跳三)
+// 011010 (跳三)
 bool GomokuRuleSet::isOpenThree(const Board& board, Pos p, int dr, int dc) const {
-    // We need to check the line.
-    // Center is at index 4 in the pattern vector.
+    // 中心在模式向量的索引 4 处。
     std::vector<int> line = getLinePattern(board, p, dr, dc);
     
-    // We are looking for specific patterns centered at 4 (where we just played '1')
-    // The stone at 4 is '1'.
+    //寻找以 4 为中心（刚刚下了 '1' 的地方）的特定模式
+    // 索引 4 处的棋子是 '1'
     
-    // Patterns for Open Three (must be unblocked on both sides)
-    // "01110" -> indices 3,4,5 are 1. 2 and 6 are 0.
-    // "011010" -> indices 3,4,6 are 1. 5 is 0. 2 and 7 are 0.
-    // "010110" -> indices 2,4,5 are 1. 3 is 0. 1 and 6 are 0.
+    // 活三的模式（必须两端都不受阻）
+    // "01110" -> 索引 3,4,5 是 1。2 和 6 是 0
+    // "011010" -> 索引 3,4,6 是 1。5 是 0。2 和 7 是 0
+    // "010110" -> 索引 2,4,5 是 1。3 是 0。1 和 6 是 0
     
-    // Note: The pattern vector has size 9. Indices 0..8. Center is 4.
+    // 注意：模式向量大小为 9。索引 0..8。中心是 4。
     
-    // 1. Straight: .XXX.
-    // Check if we have 111 centered at 4.
-    // Could be 111 at 3,4,5 -> check 2=0, 6=0.
-    // Could be 111 at 4,5,6 -> check 3=0, 7=0. (Wait, p is the new stone)
-    // p is ALWAYS at 4.
+    // 1. 连三: .XXX.
+    // 检查是否有以 4 为中心的 111。
+    // 可能是 3,4,5 处的 111 -> 检查 2=0, 6=0
+    // 可能是 4,5,6 处的 111 -> 检查 3=0, 7=0
+    // p 永远在 4
     
-    // Case A: 111 (p is middle or end)
-    // If p is middle: 1(p)1 -> 3=1, 4=1, 5=1. Ends 2=0, 6=0.
+    // 情况 A: 111 (p 在中间或两端)
+    // 如果 p 在中间: 1(p)1 -> 3=1, 4=1, 5=1. 端点 2=0, 6=0
     if (line[3]==1 && line[4]==1 && line[5]==1) {
         if (line[2]==0 && line[6]==0) return true;
     }
-    // If p is left: (p)11 -> 4=1, 5=1, 6=1. Ends 3=0, 7=0.
+    // 如果 p 在左边: (p)11 -> 4=1, 5=1, 6=1. 端点 3=0, 7=0
     if (line[4]==1 && line[5]==1 && line[6]==1) {
         if (line[3]==0 && line[7]==0) return true;
     }
-    // If p is right: 11(p) -> 2=1, 3=1, 4=1. Ends 1=0, 5=0.
+    // 如果 p 在右边: 11(p) -> 2=1, 3=1, 4=1. 端点 1=0, 5=0
     if (line[2]==1 && line[3]==1 && line[4]==1) {
         if (line[1]==0 && line[5]==0) return true;
     }
     
-    // Case B: Broken 1011 or 1101
-    // 1(p)01 -> 4=1, 5=0, 6=1, 7=1. Ends 3=0, 8=0.
+    // 情况 B: 跳三 1011 或 1101
+    // 1(p)01 -> 4=1, 5=0, 6=1, 7=1. 端点 3=0, 8=0.
     if (line[4]==1 && line[5]==0 && line[6]==1 && line[7]==1) {
         if (line[3]==0 && line[8]==0) return true;
     }
-    // 10(p)1 -> 3=1, 4=0 (impossible, p is 1), ...
-    // p is 1.
-    // 1011 where p is the single 1: (p)011 -> 4=1, 5=0, 6=1, 7=1. (Same as above)
-    // 1011 where p is in the 11: 10(p)1 -> 2=1, 3=0, 4=1, 5=1. Ends 1=0, 6=0.
+    // 10(p)1 -> 3=1, 4=0 (不可能, p 是 1), ...
+    // p 是 1.
+    // 1011 其中 p 是单独的 1: (p)011 -> 4=1, 5=0, 6=1, 7=1. (同上)
+    // 1011 其中 p 在 11 中: 10(p)1 -> 2=1, 3=0, 4=1, 5=1. 端点 1=0, 6=0
     if (line[2]==1 && line[3]==0 && line[4]==1 && line[5]==1) {
         if (line[1]==0 && line[6]==0) return true;
     }
-    // 1011 where p is end: 101(p) -> 1=1, 2=0, 3=1, 4=1. Ends 0=0, 5=0.
+    // 1011 其中 p 是末端: 101(p) -> 1=1, 2=0, 3=1, 4=1. 端点 0=0, 5=0
     if (line[1]==1 && line[2]==0 && line[3]==1 && line[4]==1) {
         if (line[0]==0 && line[5]==0) return true;
     }
     
-    // Symmetric for 1101
-    // 110(p) -> 2=1, 3=1, 4=0 (impossible)
-    // (p)101 -> 4=1, 5=1, 6=0, 7=1. Ends 3=0, 8=0.
+    // 1101 的对称情况
+    // 110(p) -> 2=1, 3=1, 4=0 (不可能)
+    // (p)101 -> 4=1, 5=1, 6=0, 7=1. 端点 3=0, 8=0
     if (line[4]==1 && line[5]==1 && line[6]==0 && line[7]==1) {
         if (line[3]==0 && line[8]==0) return true;
     }
-    // 1(p)01 -> 3=1, 4=1, 5=0, 6=1. Ends 2=0, 7=0.
+    // 1(p)01 -> 3=1, 4=1, 5=0, 6=1. 端点 2=0, 7=0
     if (line[3]==1 && line[4]==1 && line[5]==0 && line[6]==1) {
         if (line[2]==0 && line[7]==0) return true;
     }
@@ -320,33 +318,19 @@ bool GomokuRuleSet::isOpenThree(const Board& board, Pos p, int dr, int dc) const
     return false;
 }
 
-// Check if placing at p creates a Four (Straight 4 or Broken 4 that can become 5)
-// Patterns: 1111, 10111, 11011, 11101
-// Must NOT be Overline (6+).
-// Must be able to become 5.
+// 检查在 p 点落子是否形成四
+// 必须不是长连 (6+)
+// 必须能够变成 5
 bool GomokuRuleSet::isFour(const Board& board, Pos p, int dr, int dc) const {
     std::vector<int> line = getLinePattern(board, p, dr, dc);
-    
-    // We need to find a group of 4 stones (including p at 4) that has at least one empty spot next to it to make 5.
-    // Actually, "Four" definition:
-    // "Straight Four": 011110 (Live Four) -> creates two fives.
-    // "Four": 011112 or 211110 (Rush Four) -> creates one five.
-    // "Broken Four": 10111, 11011, 11101 -> creates one five.
-    
-    // Strategy: Check all substrings of length 5 that include index 4.
-    // If a substring has four 1s and one 0, it's a potential Four.
-    // We must ensure that filling that 0 creates a 5.
-    
-    // Substrings of length 5 containing index 4:
-    // Start indices: 0, 1, 2, 3, 4. (End indices: 4, 5, 6, 7, 8)
     
     int countFours = 0;
     
     for (int start = 0; start <= 4; ++start) {
-        int end = start + 4; // length 5
+        int end = start + 4;
         if (end > 8) continue;
         
-        // Check this window of 5
+        // 检查这个 5 格窗口
         int ones = 0;
         int zeros = 0;
         int zeroIdx = -1;
@@ -356,31 +340,13 @@ bool GomokuRuleSet::isFour(const Board& board, Pos p, int dr, int dc) const {
             else if (line[k] == 0) {
                 zeros++;
                 zeroIdx = k;
-            } else {
-                // Blocked by 2
             }
         }
         
         if (ones == 4 && zeros == 1) {
-            // Found a pattern like 11101.
-            // Does filling the 0 make a 5?
-            // We need to check if the 0 is adjacent to the 4 ones in a way that makes 5.
-            // Actually, if we have 4 ones and 1 zero in a window of 5, filling the zero ALWAYS makes 5.
-            // The only catch is if it makes 6 (Overline).
-            // But we are checking "isFour", not "isFive".
-            // The definition of Four is "can become Five".
-            // So yes, this is a Four.
             return true;
         }
     }
-    
-    // Also check Straight Four (Live Four) 011110 separately?
-    // The above logic covers 01111 (with one 0).
-    // Wait, 01111 is 4 ones and 1 zero. Yes.
-    // But 1111 is length 4.
-    // If we have 1111 (compact), we need to check ends.
-    // 1111 at 4,5,6,7 -> check 3 or 8 is 0.
-    // My window scan above covers "11110" and "01111".
     
     return false;
 }
